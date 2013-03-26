@@ -77,6 +77,9 @@ CCBReader::CCBReader(CCNodeLoaderLibrary * pCCNodeLoaderLibrary, CCBMemberVariab
     this->mCCBMemberVariableAssigner = pCCBMemberVariableAssigner;
     this->mCCBSelectorResolver = pCCBSelectorResolver;
     this->mCCNodeLoaderListener = pCCNodeLoaderListener;
+    
+    mNodeGraphBoundingBox = CCRectZero;
+    
     init();
 }
 
@@ -173,6 +176,11 @@ bool CCBReader::init()
     mActionManager->setRootContainerSize(CCDirector::sharedDirector()->getWinSize());
     
     return true;
+}
+
+CCRect CCBReader::getNodeGraphBoundingBox() {
+    
+    return mNodeGraphBoundingBox;
 }
 
 CCBAnimationManager* CCBReader::getAnimationManager()
@@ -540,6 +548,20 @@ std::string CCBReader::readCachedString() {
     return this->mStringCache[n];
 }
 
+CCRect CCRectUnion(const CCRect& src1, const CCRect& src2)
+{
+    CCRect result;
+    
+    float x1 = MIN(src1.getMinX(), src2.getMinX());
+    float y1 = MIN(src1.getMinY(), src2.getMinY());
+    float x2 = MAX(src1.getMaxX(), src2.getMaxX());
+    float y2 = MAX(src1.getMaxY(), src2.getMaxY());
+    
+    result.origin=ccp(x1,y1);
+    result.size=CCSizeMake(x2-x1, y2-y1);
+    return result;
+}
+
 CCNode * CCBReader::readNodeGraph(CCNode * pParent) {
     /* Read class name. */
     std::string className = this->readCachedString();
@@ -726,11 +748,41 @@ CCNode * CCBReader::readNodeGraph(CCNode * pParent) {
     delete mAnimatedProps;
     mAnimatedProps = NULL;
 
+    //  reset it, in case of re-use the ccbreader
+    if (pParent == NULL)
+        mNodeGraphBoundingBox = CCRectZero;
+
+    // current node's combined bounding box rect
+    CCRect *boundingBox = (CCRect *)malloc(sizeof(CCRect));
+    *boundingBox = node->boundingBox();
+    if (pParent != NULL) {
+        
+        (*boundingBox).origin = pParent->convertToWorldSpace((*boundingBox).origin);
+        (*boundingBox).origin = node->convertToNodeSpace((*boundingBox).origin);
+    }
+    else {
+        
+    }
+    
     /* Read and add children. */
     int numChildren = this->readInt(false);
     for(int i = 0; i < numChildren; i++) {
         CCNode * child = this->readNodeGraph(node);
         node->addChild(child);
+        
+        *boundingBox = CCRectUnion(*boundingBox, *((CCRect*)child->getUserData()));
+        free(child->getUserData());
+    }
+    
+    if (pParent == NULL) {
+        
+        //  result!
+        mNodeGraphBoundingBox = *boundingBox;
+        free(boundingBox);
+    }
+    else {
+        (*boundingBox).origin = pParent->convertToNodeSpace(node->convertToWorldSpace((*boundingBox).origin));
+        node->setUserData(boundingBox);
     }
 
     // Call onNodeLoaded

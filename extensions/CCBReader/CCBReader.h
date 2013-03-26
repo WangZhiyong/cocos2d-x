@@ -175,6 +175,8 @@ private:
     int mCurrentByte;
     int mCurrentBit;
     
+    CCRect mNodeGraphBoundingBox;
+    
     std::vector<std::string> mStringCache;
     std::set<std::string> mLoadedSpriteSheets;
     
@@ -226,6 +228,8 @@ public:
     
     CCBAnimationManager* getAnimationManager();
     void setAnimationManager(CCBAnimationManager *pAnimationManager);
+    
+    CCRect getNodeGraphBoundingBox();
     
     // Used in CCNodeLoader::parseProperties()
     std::set<std::string>* getAnimatedProperties();
